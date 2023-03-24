@@ -50,7 +50,7 @@ async def generate_gpt_response(ctx, *, prompt):
     response, response_info, token_usage = await generate_response(ctx, prompt)
     response_tokens = token_usage['completion_tokens']
     prompt_tokens = token_usage['prompt_tokens']
-    total_tokens += token_usage['total_tokens']
+    total_tokens = token_usage['total_tokens']
     context_tokens += total_tokens
 
     # calculate prices for prompt tokens and response tokens
