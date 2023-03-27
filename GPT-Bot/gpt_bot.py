@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 import discord
 from discord.ext import commands
 import openai
+import asyncio
 
 load_dotenv()
 
@@ -29,6 +30,14 @@ intents.message_content = True
 intents.presences = False
 bot = commands.Bot(command_prefix='!', intents=intents)
 
+# Store conversation history for each user
+conversation_history = []
+system_directive = ""
+
+async def handle_txt_file(attachment):
+    content = await attachment.read()
+    return content.decode("utf-8")
+
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user.name}!')
@@ -47,7 +56,11 @@ async def on_command_error(ctx, error):
 async def generate_gpt_response(ctx, *, prompt):
     global context_tokens, total_tokens
 
-    response, response_info, token_usage = await generate_response(ctx, prompt)
+    if ctx.message.attachments and ctx.message.attachments[0].filename.endswith(".txt"):
+        prompt = await handle_txt_file(ctx.message.attachments[0])
+
+    conversation_history.append({"role": "user", "content": prompt})
+    response, response_info, token_usage = await asyncio.wait_for(generate_response(ctx, conversation_history), timeout=3600)
     response_tokens = token_usage['completion_tokens']
     prompt_tokens = token_usage['prompt_tokens']
     total_tokens = token_usage['total_tokens']
@@ -65,23 +78,30 @@ async def generate_gpt_response(ctx, *, prompt):
 
 async def generate_response(ctx, prompt):
     try:
-        messages = [{"role": "user", "content": prompt}]
-        
-        if ctx.message.attachments:
+        messages = prompt
+
+        if system_directive != "":
+            messages.append({
+                "role": "system",
+                "content": system_directive,
+            })
+
+        if ctx.message.attachments and not ctx.message.attachments[0].filename.endswith(".txt"):
             for attachment in ctx.message.attachments:
                 image_bytes = await attachment.read()
                 messages.append({"role": "user", "content": {"image": image_bytes}})
-        
+                
         response = openai.ChatCompletion.create(
             model=curr_model,
-            max_tokens=2048,
-            n=1,
             messages=messages
         )
 
         response_text = response['choices'][0]['message']['content'].strip()
-        response_info = f"Prompt: {prompt}\n\nResponse: {response_text}"
+        response_info = f"Response: {response_text}"
         token_usage = response['usage']
+        
+        # Add the bot response to the conversation history
+        conversation_history.append({"role": "assistant", "content": response_text})
         return response_text, response_info, token_usage
     except openai.error.APIError as e:
         #Handle API error here, e.g. retry or log
