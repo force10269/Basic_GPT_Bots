@@ -26,7 +26,7 @@ total_tokens = 0
 
 intents = discord.Intents.default()
 intents.typing = True
-intents.message_content = True
+intents.messages = True
 intents.presences = False
 bot = commands.Bot(command_prefix='!', intents=intents)
 
